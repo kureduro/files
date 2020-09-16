@@ -24,13 +24,32 @@ func getBareFilename(filename string) string {
     return strings.TrimSuffix(filename, filepath.Ext(filename))
 }
 
+func (fi *FileIndex) resolve(filename string) (uniqueName string) {
+    fi.Lock()
+    defer fi.Unlock()
+
+    uniqueName = filename
+
+    copyNum, exists := fi.index[filename]
+
+    if exists {
+        bare := getBareFilename(filename)
+        ext := filepath.Ext(filename)
+        uniqueName = fmt.Sprintf("%s%s%d%s", bare, copySuffix, copyNum+1, ext)
+        fi.index[filename]++
+    }
+
+    fi.index[uniqueName] = 0
+    return
+}
+
 func main() {
     dir, err := os.Open("./")
     if err != nil {
         log.Fatalf("could not open current directory, %v", err)
     }
 
-    var index FileIndex
+    index := &FileIndex{}
     index.index = make(map[string]int)
 
     filenames, err := dir.Readdirnames(-1)
@@ -85,34 +104,30 @@ func main() {
 
             s := bufio.NewScanner(con)
             s.Scan()
-            filename := s.Text()
+            filename := index.resolve(s.Text())
             log.Printf("receiving %q", filename)
 
-            index.Lock()
-            copyNum, exists := index.index[filename]
-
-            if !exists {
-                index.index[filename] = 0    
-            } else {
-                index.index[filename]++
-                filename = fmt.Sprintf("%s%s%d%s", getBareFilename(filename), copySuffix, copyNum+1, filepath.Ext(filename))
-                index.index[filename] = 0
-                log.Printf("name conflict resolved, receiving %q", filename)
+            s.Scan()
+            fileSize, err := strconv.Atoi(s.Text())
+            if err != nil {
+                log.Print("could not parse the size of the file. connection terminated.")
+                return
             }
-            index.Unlock()
 
             file, err := os.Create(filename)
             if err != nil {
                 log.Fatalf("could not create file %q, %v", filename, err)
             }
+            defer file.Close()
 
-            n, err := io.Copy(file, con)
+            n, err := io.CopyN(file, con, int64(fileSize))
             if err != nil {
                 log.Fatalf("could not receive file %q, %v", filename, err)
             }
 
             log.Printf("received %q (%d bytes)", filename, n)
 
+            fmt.Fprint(con, filename)
         }(con)
     }
 }
