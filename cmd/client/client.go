@@ -20,6 +20,8 @@ type Parcel struct {
     Size int
 }
 
+// NewParcel will construct the new parcel, filling it with information
+// about the payload.
 func NewParcel(fullPath string) (*Parcel, error) {
     parcel := &Parcel{
         Path: fullPath,
@@ -82,6 +84,11 @@ func main() {
         return
     }
     defer con.Close()
+
+    // Server expects: `
+    // <filename>\n
+    // <file size in bytes>\n
+    // <data>
 
     _, err = fmt.Fprintf(con, "%s\n%d\n", parcel.Name, parcel.Size)
     if err != nil {
