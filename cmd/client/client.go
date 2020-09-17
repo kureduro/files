@@ -12,19 +12,55 @@ import (
     "github.com/cheggaaa/pb/v3"
 )
 
+type Parcel struct {
+    File *os.File
+    Path string
+    Name string
+    Size int
+}
+
+func NewParcel(fullPath string) (*Parcel, error) {
+    parcel := &Parcel{
+        Path: fullPath,
+        Name: filepath.Base(fullPath),
+    }
+
+    var err error
+    parcel.File, err = os.Open(fullPath)
+    if err != nil {
+        return nil, fmt.Errorf("could not create parcel, %v", err)
+    }
+
+    stat, err := parcel.File.Stat()
+    if err != nil {
+        return nil, fmt.Errorf("could not create parcel, %v\n", err)
+    }
+
+    parcel.Size = int(stat.Size())
+
+    return parcel, nil
+}
+
+func (p *Parcel) Read(b []byte) (int, error) {
+    return p.File.Read(b)
+}
+
+func (p *Parcel) Close() {
+    p.File.Close()
+}
+
 func main() {
     if len(os.Args) != 3 {
         fmt.Printf("Usage:\n\tfilec <filename> <host>:<port>\n\n")
         return
     }
 
-    filename := os.Args[1]
-    file, err := os.Open(filename)
+    parcel, err := NewParcel(os.Args[1])
     if err != nil {
-        fmt.Printf("could not open file %s\n%v\n", filename, err)
+        fmt.Print(err)
         return
     }
-    defer file.Close()
+    defer parcel.Close()
 
     ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
     defer cancel()
@@ -38,25 +74,18 @@ func main() {
     }
     defer con.Close()
 
-    stat, err := file.Stat()
-    if err != nil {
-        fmt.Printf("could not access file properties, %v\n", err)
-        return
-    }
-
-    fileSize := int(stat.Size())
-    _, err = fmt.Fprintf(con, "%s\n%d\n", filepath.Base(file.Name()), fileSize)
+    _, err = fmt.Fprintf(con, "%s\n%d\n", parcel.Name, parcel.Size)
     if err != nil {
         fmt.Printf("could not transfer metadata\n%v\n", err)
         return
     }
 
-    bar := pb.Full.Start(fileSize)
+    bar := pb.Full.Start(parcel.Size)
     barWriter := bar.NewProxyWriter(con)
 
     buf := make([]byte, 1024)
-    for i, n := 0, 0; i < fileSize; i += n {
-        n, err = file.Read(buf)
+    for i, n := 0, 0; i < parcel.Size; i += n {
+        n, err = parcel.Read(buf)
         if n == 0 || err != nil {
             fmt.Printf("unexpected error reading file at byte %d, %v\n", i, err)
             return
