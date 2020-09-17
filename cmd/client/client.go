@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+
+    "github.com/cheggaaa/pb/v3"
 )
 
 func main() {
@@ -49,6 +51,9 @@ func main() {
         return
     }
 
+    bar := pb.Full.Start(fileSize)
+    barWriter := bar.NewProxyWriter(con)
+
     buf := make([]byte, 1024)
     for i, n := 0, 0; i < fileSize; i += n {
         n, err = file.Read(buf)
@@ -57,16 +62,13 @@ func main() {
             return
         }
 
-        _, err = con.Write(buf[:n])
+        _, err = barWriter.Write(buf[:n])
         if err != nil {
             fmt.Printf("unexpected error transferring file at byte %d, %v\n", i, err)
             return
         }
-        
-        perc := 100.0 * float64(i) / float64(fileSize)
-        fmt.Printf("   %.2f%% transfered (%db/%db)\r", perc, i, fileSize)
     }
-    fmt.Printf("   100.00%% transfered (%db/%db)\n", fileSize, fileSize)
+    bar.Finish()
 
     n, err := con.Read(buf)
     serverFilename := string(buf[:n])
