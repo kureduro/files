@@ -2,7 +2,6 @@ package main
 
 import (
     "fmt"
-	"bufio"
 	"io"
 	"log"
 	"net"
@@ -102,32 +101,41 @@ func main() {
         go func(con net.Conn) {
             defer con.Close()
 
-            s := bufio.NewScanner(con)
-            s.Scan()
-            filename := index.resolve(s.Text())
-            log.Printf("receiving %q", filename)
+            var filename string
+            _, err := fmt.Fscanf(con, "%s\n", &filename)
+            if err != nil {
+                log.Print("could not read the name of the file. connection terminated.")
+                return
+            }
+            filename = index.resolve(filename)
 
-            s.Scan()
-            fileSize, err := strconv.Atoi(s.Text())
+            var fileSize int64
+            _, err = fmt.Fscanf(con, "%d\n", &fileSize)
             if err != nil {
                 log.Print("could not parse the size of the file. connection terminated.")
                 return
             }
 
+            log.Printf("receiving %q (expected %d bytes)", filename, fileSize)
+
             file, err := os.Create(filename)
             if err != nil {
-                log.Fatalf("could not create file %q, %v", filename, err)
+                log.Printf("could not create file %q, %v", filename, err)
+                return
             }
             defer file.Close()
 
-            n, err := io.CopyN(file, con, int64(fileSize))
+            n, err := io.CopyN(file, con, fileSize)
             if err != nil {
-                log.Fatalf("could not receive file %q, %v", filename, err)
+                log.Printf("could not receive file %q, %v", filename, err)
             }
 
             log.Printf("received %q (%d bytes)", filename, n)
 
-            fmt.Fprint(con, filename)
+            _, err = fmt.Fprint(con, filename)
+            if err != nil {
+                log.Printf("could not send the name of the file back.")
+            }
         }(con)
     }
 }
