@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -9,7 +10,7 @@ import (
 
 	"golang.org/x/net/context"
 
-    "github.com/cheggaaa/pb/v3"
+	"github.com/cheggaaa/pb/v3"
 )
 
 type Parcel struct {
@@ -49,6 +50,19 @@ func (p *Parcel) Close() {
     p.File.Close()
 }
 
+func dial(hostAddr string) (net.Conn, error) {
+    ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+    defer cancel()
+
+    var d net.Dialer
+    con, err := d.DialContext(ctx, "tcp", hostAddr)
+    if err != nil {
+        return nil, fmt.Errorf("could not dial destination host, %v", err)
+    }
+
+    return con, nil
+}
+
 func main() {
     if len(os.Args) != 3 {
         fmt.Printf("Usage:\n\tfilec <filename> <host>:<port>\n\n")
@@ -57,26 +71,21 @@ func main() {
 
     parcel, err := NewParcel(os.Args[1])
     if err != nil {
-        fmt.Print(err)
+        fmt.Println(err)
         return
     }
     defer parcel.Close()
 
-    ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
-    defer cancel()
-
-    var d net.Dialer
-    hostAddr := os.Args[2]
-    con, err := d.DialContext(ctx, "tcp", hostAddr)
+    con, err := dial(os.Args[2])
     if err != nil {
-        fmt.Printf("could not connect to %s\n%v\n", hostAddr, err)
+        fmt.Println(err)
         return
     }
     defer con.Close()
 
     _, err = fmt.Fprintf(con, "%s\n%d\n", parcel.Name, parcel.Size)
     if err != nil {
-        fmt.Printf("could not transfer metadata\n%v\n", err)
+        fmt.Printf("could not transfer metadata, %v\n", err)
         return
     }
 
@@ -86,7 +95,7 @@ func main() {
     buf := make([]byte, 1024)
     for i, n := 0, 0; i < parcel.Size; i += n {
         n, err = parcel.Read(buf)
-        if n == 0 || err != nil {
+        if err != nil && err != io.EOF {
             fmt.Printf("unexpected error reading file at byte %d, %v\n", i, err)
             return
         }
@@ -102,5 +111,5 @@ func main() {
     n, err := con.Read(buf)
     serverFilename := string(buf[:n])
 
-    fmt.Printf("saved as %q\n\n", serverFilename)
+    fmt.Printf("saved as %q\n", serverFilename)
 }
