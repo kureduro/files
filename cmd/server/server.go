@@ -145,6 +145,11 @@ func receiveFile(con net.Conn, index *FileIndex) {
 }
 
 func main() {
+    if len(os.Args) != 2 {
+        fmt.Printf("Usage:\n\tfiles <port>\n\n")
+        return
+    }
+
     dir, err := os.Open("./")
     if err != nil {
         log.Fatalf("could not open current directory, %v", err)
@@ -156,7 +161,7 @@ func main() {
         log.Fatal(err)
     }
 
-    l, err := net.Listen("tcp", ":8888")
+    l, err := net.Listen("tcp", ":" + os.Args[1])
     if err != nil {
         log.Fatalf("could not start listening, %v", err)
     }
