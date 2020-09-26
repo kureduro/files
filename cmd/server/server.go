@@ -113,7 +113,6 @@ func receiveFile(con net.Conn, index *FileIndex) {
         log.Print("could not read the name of the file. connection terminated.")
         return
     }
-    filename = index.Resolve(filename)
 
     var fileSize int64
     _, err = fmt.Fscanf(con, "%d\n", &fileSize)
@@ -122,26 +121,27 @@ func receiveFile(con net.Conn, index *FileIndex) {
         return
     }
 
-    file, err := os.Create(filename)
+    serverFilename := index.Resolve(filename)
+    _, err = fmt.Fprint(con, serverFilename)
     if err != nil {
-        log.Printf("could not create file %q, %v", filename, err)
+        log.Printf("could not send the name of the file back.")
+    }
+
+    file, err := os.Create(serverFilename)
+    if err != nil {
+        log.Printf("could not create file %q, %v", serverFilename, err)
         return
     }
     defer file.Close()
 
-    log.Printf("receiving %q (expected %d bytes)", filename, fileSize)
+    log.Printf("receiving %q (expected %d bytes)", serverFilename, fileSize)
 
     n, err := io.CopyN(file, con, fileSize)
     if err != nil {
-        log.Printf("could not receive file %q, %v", filename, err)
+        log.Printf("could not receive file %q, %v", serverFilename, err)
     }
 
-    log.Printf("received %q (%d bytes)", filename, n)
-
-    _, err = fmt.Fprint(con, filename)
-    if err != nil {
-        log.Printf("could not send the name of the file back.")
-    }
+    log.Printf("received %q (%d bytes)", serverFilename, n)
 }
 
 func main() {

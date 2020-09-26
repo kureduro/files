@@ -85,10 +85,11 @@ func main() {
     }
     defer con.Close()
 
-    // Server expects: `
-    // <filename>\n
-    // <file size in bytes>\n
-    // <data>
+    // Protocol (with Clinet and Server)
+    // C: <filename>\n
+    // C: <file size in bytes>\n
+    // S: <filename on the server>
+    // C: <data>
 
     _, err = fmt.Fprintf(con, "%s\n%d\n", parcel.Name, parcel.Size)
     if err != nil {
@@ -96,10 +97,17 @@ func main() {
         return
     }
 
+    buf := make([]byte, 1024)
+    n, err := con.Read(buf)
+    serverFilename := string(buf[:n])
+    if serverFilename != parcel.Name {
+        fmt.Printf("warning: %s already exists on server, will be renamed to %s\n",
+                  parcel.Name, serverFilename)
+    }
+
     bar := pb.Full.Start(parcel.Size)
     barWriter := bar.NewProxyWriter(con)
 
-    buf := make([]byte, 1024)
     for i, n := 0, 0; i < parcel.Size; i += n {
         n, err = parcel.Read(buf)
         if err != nil && err != io.EOF {
@@ -114,9 +122,4 @@ func main() {
         }
     }
     bar.Finish()
-
-    n, err := con.Read(buf)
-    serverFilename := string(buf[:n])
-
-    fmt.Printf("saved as %q\n", serverFilename)
 }
