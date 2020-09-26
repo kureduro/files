@@ -87,11 +87,10 @@ func main() {
 
     // Protocol (with Clinet and Server)
     // C: <filename>\n
-    // C: <file size in bytes>\n
     // S: <filename on the server>
     // C: <data>
 
-    _, err = fmt.Fprintf(con, "%s\n%d\n", parcel.Name, parcel.Size)
+    _, err = fmt.Fprintf(con, "%s\n", parcel.Name)
     if err != nil {
         fmt.Printf("could not transfer metadata, %v\n", err)
         return

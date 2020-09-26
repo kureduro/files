@@ -114,13 +114,6 @@ func receiveFile(con net.Conn, index *FileIndex) {
         return
     }
 
-    var fileSize int64
-    _, err = fmt.Fscanf(con, "%d\n", &fileSize)
-    if err != nil {
-        log.Print("could not parse the size of the file. connection terminated.")
-        return
-    }
-
     serverFilename := index.Resolve(filename)
     _, err = fmt.Fprint(con, serverFilename)
     if err != nil {
@@ -134,14 +127,30 @@ func receiveFile(con net.Conn, index *FileIndex) {
     }
     defer file.Close()
 
-    log.Printf("receiving %q (expected %d bytes)", serverFilename, fileSize)
+    log.Printf("receiving %q...", serverFilename)
 
-    n, err := io.CopyN(file, con, fileSize)
-    if err != nil {
-        log.Printf("could not receive file %q, %v", serverFilename, err)
+    fileSize := 0
+    buf := make([]byte, 1024)
+    for {
+        n, err := con.Read(buf)
+        if err != nil {
+            if err == io.EOF {
+                break
+            }
+
+            log.Printf("could not receive file %q, %v", serverFilename, err)
+        }
+
+        fileSize += n
+
+        _, err = file.Write(buf[:n])
+        if err != nil {
+            log.Printf("could not receive file %q, %v", serverFilename, err)
+        }
+
     }
 
-    log.Printf("received %q (%d bytes)", serverFilename, n)
+    log.Printf("received %q (%d bytes)", serverFilename, fileSize)
 }
 
 func main() {
