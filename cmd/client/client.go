@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/flate"
 	"fmt"
 	"io"
 	"net"
@@ -104,8 +105,14 @@ func main() {
                   parcel.Name, serverFilename)
     }
 
+    zw, err := flate.NewWriter(con, flate.BestSpeed)
+    if err != nil {
+        fmt.Printf("could not initialize DEFLATE compressor, %v\n", err)
+        return
+    }
+
     bar := pb.Full.Start(parcel.Size)
-    barWriter := bar.NewProxyWriter(con)
+    barWriter := bar.NewProxyWriter(zw)
 
     for i, n := 0, 0; i < parcel.Size; i += n {
         n, err = parcel.Read(buf)
@@ -120,5 +127,11 @@ func main() {
             return
         }
     }
+
+    if err = zw.Close(); err != nil {
+        fmt.Printf("could not close DEFLATE compressor (some data may have been lost), %v", err)
+        return
+    }
+
     bar.Finish()
 }

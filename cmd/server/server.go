@@ -1,7 +1,8 @@
 package main
 
 import (
-    "fmt"
+	"compress/flate"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -131,14 +132,16 @@ func receiveFile(con net.Conn, index *FileIndex) {
 
     fileSize := 0
     buf := make([]byte, 1024)
+    zr := flate.NewReader(con)
     for {
-        n, err := con.Read(buf)
-        if err != nil {
+        n, err := zr.Read(buf)
+        if n == 0 {
             if err == io.EOF {
                 break
             }
 
             log.Printf("could not receive file %q, %v", serverFilename, err)
+            return
         }
 
         fileSize += n
@@ -146,8 +149,13 @@ func receiveFile(con net.Conn, index *FileIndex) {
         _, err = file.Write(buf[:n])
         if err != nil {
             log.Printf("could not receive file %q, %v", serverFilename, err)
+            return
         }
+    }
 
+    if err := zr.Close(); err != nil {
+        log.Printf("warning: could not close DEFLATE decompressor for %q, %v", 
+                   serverFilename, err)
     }
 
     log.Printf("received %q (%d bytes)", serverFilename, fileSize)
